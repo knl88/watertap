@@ -25,7 +25,7 @@ __author__ = "Kim Leirvik"
 @declare_process_block_class("MBBRZO")
 class MBBRZOData(ZeroOrderBaseData):
     """
-    Zero-Order model for a MBBR unit.
+    This module contains a zero-order representation of a moving bed biofilm reactor unit.
     """
 
     CONFIG = ZeroOrderBaseData.CONFIG()

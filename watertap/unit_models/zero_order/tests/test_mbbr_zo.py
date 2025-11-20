@@ -38,7 +38,7 @@ from watertap.costing.zero_order_costing import ZeroOrderCosting
 solver = get_solver()
 
 
-class TestMBBRZO:
+class TestMBBRZO_NH4_N:
     @pytest.fixture(scope="class")
     def model(self):
         m = ConcreteModel()
@@ -49,13 +49,15 @@ class TestMBBRZO:
             solute_list=["bod", "tss", "ammonium_as_nitrogen", "nitrate"]
         )
 
-        m.fs.unit = MBBRZO(property_package=m.fs.params, database=m.db)
+        m.fs.unit = MBBRZO(property_package=m.fs.params, database=m.db, process_subtype="bod-stage")
 
         m.fs.unit.inlet.flow_mass_comp[0, "H2O"].fix(10)
         m.fs.unit.inlet.flow_mass_comp[0, "bod"].fix(5)
         m.fs.unit.inlet.flow_mass_comp[0, "tss"].fix(5)
         m.fs.unit.inlet.flow_mass_comp[0, "ammonium_as_nitrogen"].fix(2)
         m.fs.unit.inlet.flow_mass_comp[0, "nitrate"].fix(1)
+        m.fs.unit.media_specific_area.fix(500)
+        m.fs.unit.fill_fraction.fix(0.50)
 
         return m
 
@@ -115,6 +117,13 @@ class TestMBBRZO:
     @pytest.mark.solver
     @pytest.mark.skipif(solver is None, reason="Solver not available")
     @pytest.mark.component
+    def test_unit(self, model):
+        assert pytest.approx(108000.0, rel=1e-5) == value(
+            model.fs.unit.volume
+        )
+    @pytest.mark.solver
+    @pytest.mark.skipif(solver is None, reason="Solver not available")
+    @pytest.mark.component
     def test_solution(self, model):
         assert pytest.approx(0.023, rel=1e-5) == value(
             model.fs.unit.properties_in[0].flow_vol
@@ -132,20 +141,20 @@ class TestMBBRZO:
             model.fs.unit.properties_in[0].conc_mass_comp["nitrate"]
         )
 
-        assert pytest.approx(0.0202, rel=1e-2) == value(
+        assert pytest.approx(0.01925, rel=1e-2) == value(
             model.fs.unit.properties_treated[0].flow_vol
         )
-        assert pytest.approx(108.9109, rel=1e-5) == value(
+        assert pytest.approx(64.9350, rel=1e-5) == value(
             model.fs.unit.properties_treated[0].conc_mass_comp["bod"]
         )
-        assert pytest.approx(118.8119, rel=1e-5) == value(
+        assert pytest.approx(51.94805, rel=1e-5) == value(
             model.fs.unit.properties_treated[0].conc_mass_comp["nitrate"]
         )
 
         assert pytest.approx(0, abs=1e-9) == value(
             model.fs.unit.properties_byproduct[0].flow_vol
         )
-        assert pytest.approx(1105.3883, abs=1e-5) == value(model.fs.unit.electricity[0])
+        assert pytest.approx(41.4, abs=1e-5) == value(model.fs.unit.electricity[0])
 
     @pytest.mark.solver
     @pytest.mark.skipif(solver is None, reason="Solver not available")
@@ -180,10 +189,10 @@ def test_no_NH4_N_in_solute_list_error():
     with pytest.raises(
         ValueError,
         match="fs.unit - key_reactant ammonium_as_nitrogen for reaction "
-        "ammonium_to_nitrate is not in the component list used by the "
+        "nitrification is not in the component list used by the "
         "assigned property package.",
     ):
-        m.fs.unit = MBBRZO(property_package=m.fs.params, database=m.db)
+        m.fs.unit = MBBRZO(property_package=m.fs.params, database=m.db, process_subtype="nitrification-stage")
 
 
 def test_costing():
@@ -198,7 +207,7 @@ def test_costing():
 
     m.fs.costing = ZeroOrderCosting()
 
-    m.fs.unit1 = MBBRZO(property_package=m.fs.params, database=m.db)
+    m.fs.unit1 = MBBRZO(property_package=m.fs.params, database=m.db, process_subtype="nitrification-stage")
 
     m.fs.unit1.inlet.flow_mass_comp[0, "H2O"].fix(10)
     m.fs.unit1.inlet.flow_mass_comp[0, "bod"].fix(5)
@@ -206,13 +215,14 @@ def test_costing():
     m.fs.unit1.inlet.flow_mass_comp[0, "ammonium_as_nitrogen"].fix(2)
     m.fs.unit1.inlet.flow_mass_comp[0, "nitrate"].fix(1)
     m.fs.unit1.load_parameters_from_database(use_default_removal=True)
+    m.fs.unit1.media_specific_area.fix(500)
+    m.fs.unit1.fill_fraction.fix(0.50)
+    
     assert degrees_of_freedom(m.fs.unit1) == 0
 
     m.fs.unit1.costing = UnitModelCostingBlock(flowsheet_costing_block=m.fs.costing)
 
     assert isinstance(m.fs.costing.mbbr, Block)
-    assert isinstance(m.fs.costing.mbbr.reactor_cost, Var)
-    assert isinstance(m.fs.costing.mbbr.blower_cost, Var)
     assert isinstance(m.fs.unit1.costing.capital_cost, Var)
     assert isinstance(m.fs.unit1.costing.capital_cost_constraint, Constraint)
 
